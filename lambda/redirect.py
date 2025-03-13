@@ -1,12 +1,40 @@
 import json
+import boto3
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('urls')
+
 def lambda_handler(event, context):
-    short_code = event['pathParameters']['code']
-    store = {"abc123": "google.com"}  # Dummy for now
-    long_url = store.get(short_code, "404")
-    if long_url == "404":
-        return {"statusCode": 404, "body": json.dumps("Not found")}
+    logger.info("Event received: %s", event)
+    try:
+        short_code = event.get('queryStringParameters', {}).get('code', '')
+        if not short_code:
+            raise KeyError('Missing code parameter')
+    except KeyError:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'error': 'Missing code parameter'}),
+            'headers': {'Content-Type': 'application/json'}
+        }
+
+    response = table.get_item(Key={'short_code': short_code})
+    original_url = response.get('Item', {}).get('original_url')
+
+    if not original_url:
+        return {
+            'statusCode': 404,
+            'body': json.dumps({'error': 'Short code not found'}),
+            'headers': {'Content-Type': 'application/json'}
+        }
+
     return {
-        "statusCode": 301,
-        "headers": {"Location": long_url},
-        "body": ""
+        'statusCode': 302,
+        'headers': {
+            'Location': original_url
+        },
+        'body': ''
     }

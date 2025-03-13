@@ -144,7 +144,7 @@ resource "aws_lambda_permission" "api_gateway_shorten" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.shorten.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.url_shortener_api.execution_arn}/*/*"
+  source_arn    = "arn:aws:execute-api:us-east-1:724772086697:t0b9dgyin1/*/*"
 }
 
 resource "aws_lambda_permission" "api_gateway_redirect" {
@@ -152,7 +152,7 @@ resource "aws_lambda_permission" "api_gateway_redirect" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.redirect.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.url_shortener_api.execution_arn}/prod/GET/redirect/*"
+  source_arn    = "arn:aws:execute-api:us-east-1:724772086697:t0b9dgyin1/*/GET/redirect/*"
 }
 
 # Deploy API Gateway
@@ -165,6 +165,9 @@ resource "aws_api_gateway_deployment" "url_shortener_deployment" {
   lifecycle {
     create_before_destroy = true
   }
+  triggers = {
+    redeployment = "2025-03-13-00-00-v10"  # Fresh deployment
+  }
 }
 
 resource "aws_api_gateway_stage" "prod" {
@@ -175,6 +178,25 @@ resource "aws_api_gateway_stage" "prod" {
   lifecycle {
     create_before_destroy = true
   }
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_gateway_logs.arn
+    format          = "$context.identity.sourceIp $context.identity.caller $context.identity.user [$context.requestTime] \"$context.httpMethod $context.resourcePath $context.protocol\" $context.status $context.responseLength $context.requestId"
+  }
+}
+
+resource "aws_api_gateway_method_settings" "all" {
+  rest_api_id = aws_api_gateway_rest_api.url_shortener_api.id
+  stage_name  = aws_api_gateway_stage.prod.stage_name
+  method_path = "*/*"
+  settings {
+    logging_level      = "INFO"
+    data_trace_enabled = true
+  }
+}
+
+resource "aws_cloudwatch_log_group" "api_gateway_logs" {
+  name = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.url_shortener_api.id}/prod"
 }
 
 # Update the output to use the new stage
