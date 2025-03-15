@@ -28,7 +28,7 @@ jobs:
           cd lambda
           zip -r shorten.zip shorten.py boto3
           zip -r redirect.zip redirect.py boto3
-          mv shorten.zip redirect.zip ../terraform/
+          # Remove the mv command so ZIPs stay in lambda/
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
