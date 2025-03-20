@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for SonarQube full history analysis
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -22,13 +24,36 @@ jobs:
         with:
           terraform_version: 1.5.7
 
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Run Trivy Scan
+        run: |
+          # Scan Python dependencies in lambda/
+          trivy fs --severity HIGH,CRITICAL lambda/
+          # Scan Terraform files for misconfigurations
+          trivy config terraform/
+        continue-on-error: true  # Won't fail build, adjust if needed
+
+      - name: Run SonarQube Scan
+        uses: sonarsource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}  # Add this in GitHub Secrets
+        with:
+          projectBaseDir: lambda/
+          args: >
+            -Dsonar.projectKey=paulcyi_serverless-url-shortener
+            -Dsonar.organization=paulcyi
+            -Dsonar.python.version=3.9
+
       - name: Package Lambda functions
         run: |
           pip install boto3 -t lambda/
           cd lambda
           zip -r shorten.zip shorten.py boto3
           zip -r redirect.zip redirect.py boto3
-          # Remove the mv command so ZIPs stay in lambda/
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
